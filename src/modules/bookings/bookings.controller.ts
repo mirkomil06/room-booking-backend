@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { bookingsService } from './bookings.service';
 import { sendSuccess, sendError } from '../../utils/response';
-import { createBookingSchema } from '../../validators/booking.validator';
+import { createBookingSchema, adminCreateBookingSchema } from '../../validators/booking.validator';
 import { BookingStatus } from '@prisma/client';
 
 export class BookingsController {
@@ -103,6 +103,31 @@ export class BookingsController {
             const limit = parseInt(req.query.limit as string) || 5;
             const bookings = await bookingsService.getRecentBookings(limit);
             sendSuccess(res, 'Recent bookings fetched successfully', bookings);
+        } catch (error) {
+            next(error);
+        }
+    }
+
+    // ADMIN — create booking with override capability
+    async adminCreate(req: Request, res: Response, next: NextFunction) {
+        try {
+            const validated = adminCreateBookingSchema.parse(req.body);
+            const result = await bookingsService.adminCreateBooking(validated);
+
+            if (result.conflict) {
+                res.status(409).json({
+                    success: false,
+                    message: 'This time slot is already booked',
+                    statusCode: 409,
+                    data: {
+                        conflict: true,
+                        existingBooking: result.existingBooking,
+                    },
+                });
+                return;
+            }
+
+            sendSuccess(res, 'Booking created successfully', result.booking, 201);
         } catch (error) {
             next(error);
         }

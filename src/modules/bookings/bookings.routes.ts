@@ -31,6 +31,12 @@ router.get(
     adminOnly,
     bookingsController.getAll.bind(bookingsController)
 );
+router.post(
+    '/admin-create',
+    authMiddleware,
+    adminOnly,
+    bookingsController.adminCreate.bind(bookingsController)
+);
 router.get(
     '/:id',
     authMiddleware,

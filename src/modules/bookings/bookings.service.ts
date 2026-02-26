@@ -275,6 +275,101 @@ export class BookingsService {
 
         return bookings;
     }
+
+    async adminCreateBooking(data: {
+        roomId: string;
+        firstName: string;
+        lastName: string;
+        date: string;
+        startTime: string;
+        endTime: string;
+        departmentId?: string;
+        forceOverride: boolean;
+    }) {
+        // Find room by roomId
+        const room = await prisma.room.findUnique({
+            where: { id: data.roomId },
+        });
+
+        if (!room) {
+            throw Object.assign(new Error('Room not found'), { statusCode: 404 });
+        }
+
+        if (!room.isActive) {
+            throw Object.assign(
+                new Error('This room is currently not available for booking'),
+                { statusCode: 403 }
+            );
+        }
+
+        const bookingDate = new Date(data.date);
+        const startTime = new Date(data.startTime);
+        const endTime = new Date(data.endTime);
+
+        // Check for overlapping ACTIVE bookings
+        const overlapping = await prisma.booking.findMany({
+            where: {
+                roomId: room.id,
+                status: BookingStatus.ACTIVE,
+                date: bookingDate,
+                startTime: { lt: endTime },
+                endTime: { gt: startTime },
+            },
+            include: {
+                department: {
+                    select: { name: true },
+                },
+            },
+        });
+
+        if (overlapping.length > 0 && !data.forceOverride) {
+            const existing = overlapping[0];
+            return {
+                conflict: true,
+                existingBooking: {
+                    id: existing.id,
+                    firstName: existing.firstName,
+                    lastName: existing.lastName,
+                    startTime: existing.startTime,
+                    endTime: existing.endTime,
+                    department: existing.department,
+                },
+            };
+        }
+
+        // If forceOverride, cancel all overlapping bookings
+        if (overlapping.length > 0 && data.forceOverride) {
+            await prisma.booking.updateMany({
+                where: {
+                    id: { in: overlapping.map((b) => b.id) },
+                },
+                data: { status: BookingStatus.CANCELLED },
+            });
+        }
+
+        // Create new booking
+        const booking = await prisma.booking.create({
+            data: {
+                roomId: room.id,
+                firstName: data.firstName,
+                lastName: data.lastName,
+                date: bookingDate,
+                startTime,
+                endTime,
+                departmentId: data.departmentId,
+            },
+            include: {
+                room: {
+                    select: { id: true, name: true, location: true },
+                },
+                department: {
+                    select: { id: true, name: true },
+                },
+            },
+        });
+
+        return { conflict: false, booking };
+    }
 }
 
 export const bookingsService = new BookingsService();
