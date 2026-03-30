@@ -106,6 +106,49 @@ export class AuthService {
     async logout(refreshToken: string) {
         invalidatedTokens.add(refreshToken);
     }
+
+    async changePassword(
+        adminId: string,
+        currentPassword: string,
+        newPassword: string
+    ) {
+        const admin = await prisma.admin.findUnique({
+            where: { id: adminId },
+        });
+
+        if (!admin) {
+            throw Object.assign(new Error('Admin not found'), {
+                statusCode: 404,
+            });
+        }
+
+        const isCurrentPasswordValid = await bcrypt.compare(
+            currentPassword,
+            admin.passwordHash
+        );
+
+        if (!isCurrentPasswordValid) {
+            throw Object.assign(new Error('Current password is incorrect'), {
+                statusCode: 400,
+            });
+        }
+
+        const isSamePassword = await bcrypt.compare(newPassword, admin.passwordHash);
+
+        if (isSamePassword) {
+            throw Object.assign(
+                new Error('New password must be different from the current password'),
+                { statusCode: 400 }
+            );
+        }
+
+        const newPasswordHash = await bcrypt.hash(newPassword, 12);
+
+        await prisma.admin.update({
+            where: { id: adminId },
+            data: { passwordHash: newPasswordHash },
+        });
+    }
 }
 
 export const authService = new AuthService();

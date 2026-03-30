@@ -1,9 +1,10 @@
-import { Request, Response, NextFunction } from 'express';
+import { Response, NextFunction } from 'express';
 import { authService } from './auth.service';
 import { sendSuccess, sendError } from '../../utils/response';
+import { AuthRequest } from '../../middlewares/auth.middleware';
 
 export class AuthController {
-    async register(req: Request, res: Response, next: NextFunction) {
+    async register(req: AuthRequest, res: Response, next: NextFunction) {
         try {
             const { email, password, secretKey } = req.body;
 
@@ -19,7 +20,7 @@ export class AuthController {
         }
     }
 
-    async login(req: Request, res: Response, next: NextFunction) {
+    async login(req: AuthRequest, res: Response, next: NextFunction) {
         try {
             const { email, password } = req.body;
 
@@ -48,7 +49,7 @@ export class AuthController {
         }
     }
 
-    async refresh(req: Request, res: Response, next: NextFunction) {
+    async refresh(req: AuthRequest, res: Response, next: NextFunction) {
         try {
             const refreshToken =
                 req.cookies?.refreshToken || req.body?.refreshToken;
@@ -65,7 +66,7 @@ export class AuthController {
         }
     }
 
-    async logout(req: Request, res: Response, next: NextFunction) {
+    async logout(req: AuthRequest, res: Response, next: NextFunction) {
         try {
             const refreshToken =
                 req.cookies?.refreshToken || req.body?.refreshToken;
@@ -79,6 +80,23 @@ export class AuthController {
 
             res.clearCookie('refreshToken');
             sendSuccess(res, 'Logged out successfully');
+        } catch (error) {
+            next(error);
+        }
+    }
+
+    async changePassword(req: AuthRequest, res: Response, next: NextFunction) {
+        try {
+            const { currentPassword, newPassword } = req.body;
+
+            if (!currentPassword || !newPassword) {
+                sendError(res, 'currentPassword and newPassword are required', 400);
+                return;
+            }
+
+            const adminId = req.admin!.adminId;
+            await authService.changePassword(adminId, currentPassword, newPassword);
+            sendSuccess(res, 'Password changed successfully');
         } catch (error) {
             next(error);
         }
